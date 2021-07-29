@@ -1,10 +1,10 @@
 use q_compress::BitReader;
-use q_compress::bits::bits_to_string;
 use q_compress::compressor::Compressor;
 use q_compress::decompressor::Decompressor;
 use q_compress::types::{DataType, NumberLike};
 use q_compress::types::float64::F64DataType;
 use q_compress::types::signed64::I64DataType;
+use q_compress::types::boolean::BoolDataType;
 use std::convert::TryInto;
 use std::env;
 use std::fs;
@@ -22,6 +22,14 @@ fn basename_no_ext(path: &Path) -> String {
     Some(i) => basename[..i].to_string(),
     _ => basename.to_string(),
   }
+}
+
+fn bits_to_string(bits: &[bool]) -> String {
+  return bits
+    .iter()
+    .map(|b| if *b {"1"} else {"0"})
+    .collect::<Vec<&str>>()
+    .join("");
 }
 
 trait DtypeHandler<T: 'static, DT> where T: NumberLike, DT: DataType<T> {
@@ -113,6 +121,17 @@ impl DtypeHandler<f64, F64DataType> for F64Handler {
   }
 }
 
+struct BoolHandler {}
+
+impl DtypeHandler<bool, BoolDataType> for BoolHandler {
+  fn parse_nums(bytes: &[u8]) -> Vec<bool> {
+    bytes
+      .chunks(1)
+      .map(|chunk| u8::from_le_bytes(chunk.try_into().expect("incorrect # of bytes in file")) != 0)
+      .collect()
+  }
+}
+
 fn main() {
   let args: Vec<String> = env::args().collect();
   let max_depth: u32 = if args.len() >= 2 {
@@ -149,6 +168,8 @@ fn main() {
       I64Handler::handle(&path, max_depth, &output_dir);
     } else if path_str.contains("f64") {
       F64Handler::handle(&path, max_depth, &output_dir);
+    } else if path_str.contains("bool8") {
+      BoolHandler::handle(&path, max_depth, &output_dir);
     } else {
       panic!("Could not determine dtype for file {}!", path_str);
     };
